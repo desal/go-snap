@@ -127,6 +127,13 @@ func (c *Context) Snapshot(workingDir, pkgString string) DepsFile {
 			}
 		}
 
+		if xTestImportsInt, ok := e["XTestImports"]; ok {
+			xTestImports := xTestImportsInt.([]interface{})
+			for _, testImport := range xTestImports {
+				allTestImports[testImport.(string)] = empty{}
+			}
+		}
+
 		if depsInt, ok := e["Deps"]; ok {
 			deps := depsInt.([]interface{})
 			for _, dep := range deps {
