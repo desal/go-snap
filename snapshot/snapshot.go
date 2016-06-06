@@ -65,7 +65,11 @@ outer:
 			continue
 		}
 
-		list, _ := c.goCtx.List(workingDir, importPath)
+		list, err := c.goCtx.List(workingDir, importPath)
+		if err != nil {
+			c.output.Error("Could not process dependency '%s'", importPath)
+			os.Exit(1)
+		}
 
 		cmdCtx := cmd.NewContext(".", c.output, cmd.Must)
 		dir, _ := dsutil.SanitisePath(cmdCtx, list[importPath]["Dir"].(string))
@@ -113,7 +117,11 @@ outer:
 //pkg string should be a space delimited list of packages including all subfolders
 //typically ./...
 func (c *Context) Snapshot(workingDir, pkgString string) DepsFile {
-	list, _ := c.goCtx.List(workingDir, pkgString)
+	list, err := c.goCtx.List(workingDir, pkgString)
+	if err != nil {
+		c.output.Error("Failed to run go list")
+		os.Exit(1)
+	}
 
 	allTestImports := set{}
 	regDeps := set{}
