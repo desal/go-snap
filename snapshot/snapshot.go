@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/desal/cmd"
@@ -30,11 +31,22 @@ type DepsFile struct {
 	TestDeps []PkgDep
 }
 
+func (d *DepsFile) Sort() {
+	sort.Sort(PkgDepsByImport(d.Deps))
+	sort.Sort(PkgDepsByImport(d.TestDeps))
+}
+
 type PkgDep struct {
 	ImportPath string
 	GitRemote  string //Blank for standard packages
 	SHA        string //Blank for standard packages
 }
+
+type PkgDepsByImport []PkgDep
+
+func (a PkgDepsByImport) Len() int           { return len(a) }
+func (a PkgDepsByImport) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a PkgDepsByImport) Less(i, j int) bool { return a[i].ImportPath < a[j].ImportPath }
 
 func NewContext(output cmd.Output, goPath []string) *Context {
 	return &Context{
@@ -101,14 +113,14 @@ outer:
 		}
 
 		topLevel, _ := c.gitCtx.TopLevel(dir, true)
-		//		charsToChop := len(dir) - len(topLevel)
+		topLevel, _ = dsutil.SanitisePath(cmdCtx, topLevel)
+
 		rootImportPath := importPath[:len(importPath)+len(topLevel)-len(dir)]
 
 		c.doneDirs[topLevel] = empty{}
 
 		remoteOriginUrl, _ := c.gitCtx.RemoteOriginUrl(dir, true)
 		SHA, _ := c.gitCtx.SHA(dir, true)
-
 		result = append(result, PkgDep{rootImportPath, remoteOriginUrl, SHA})
 	}
 	return result
@@ -117,6 +129,7 @@ outer:
 //pkg string should be a space delimited list of packages including all subfolders
 //typically ./...
 func (c *Context) Snapshot(workingDir, pkgString string) DepsFile {
+	cmdCtx := cmd.NewContext(".", c.output, cmd.Must)
 	list, err := c.goCtx.List(workingDir, pkgString)
 	if err != nil {
 		c.output.Error("Failed to run go list")
@@ -127,6 +140,8 @@ func (c *Context) Snapshot(workingDir, pkgString string) DepsFile {
 	regDeps := set{}
 
 	for _, e := range list {
+		dir, _ := dsutil.SanitisePath(cmdCtx, e["Dir"].(string))
+		c.doneDirs[dir] = empty{}
 
 		if testImportsInt, ok := e["TestImports"]; ok {
 			testImports := testImportsInt.([]interface{})
@@ -174,7 +189,9 @@ func (c *Context) Snapshot(workingDir, pkgString string) DepsFile {
 	depsScan := c.scanDeps(list, workingDir, regDeps)
 	testDepsScan := c.scanDeps(list, workingDir, testDeps)
 
-	return DepsFile{Deps: depsScan, TestDeps: testDepsScan}
+	r := DepsFile{Deps: depsScan, TestDeps: testDepsScan}
+	r.Sort()
+	return r
 
 }
 
