@@ -107,7 +107,9 @@ outer:
 		}
 
 		status, _ := c.gitCtx.Status(dir, true)
-		if status != git.Clean {
+		if status == git.NotMaster {
+			c.output.Warning("Import %s (%s) is not origin/master", importPath, dir)
+		} else if status != git.Clean {
 			c.output.Error("Import %s (%s) has git status %s", importPath, dir, status.String())
 			os.Exit(1)
 		}
