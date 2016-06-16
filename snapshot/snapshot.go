@@ -40,6 +40,7 @@ type PkgDep struct {
 	ImportPath string
 	GitRemote  string //Blank for standard packages
 	SHA        string //Blank for standard packages
+	Tags       []string
 }
 
 type PkgDepsByImport []PkgDep
@@ -123,7 +124,8 @@ outer:
 
 		remoteOriginUrl, _ := c.gitCtx.RemoteOriginUrl(dir, true)
 		SHA, _ := c.gitCtx.SHA(dir, true)
-		result = append(result, PkgDep{rootImportPath, remoteOriginUrl, SHA})
+		tags, _ := c.gitCtx.Tags(dir, true)
+		result = append(result, PkgDep{rootImportPath, remoteOriginUrl, SHA, tags})
 	}
 	return result
 }
