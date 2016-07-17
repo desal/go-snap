@@ -2,33 +2,72 @@ package snapshot
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/desal/cmd"
-	"github.com/desal/dsutil"
 	"github.com/desal/git"
 	"github.com/desal/gocmd"
+	"github.com/desal/richtext"
 )
 
-type empty struct{}
-type set map[string]empty
+//go:generate stringer -type Flag
 
-type Context struct {
-	startPkg string
-	doneDirs set
-	output   cmd.Output
-	goPath   []string
-	goCtx    *gocmd.Context
-	gitCtx   *git.Context
-}
+type (
+	empty     struct{}
+	Flag      int
+	flagSet   map[Flag]empty
+	stringSet map[string]empty
 
-type DepsFile struct {
-	Deps     []PkgDep
-	TestDeps []PkgDep
+	Context struct {
+		startPkg string
+		doneDirs stringSet
+		format   richtext.Format
+		goPath   []string
+		goCtx    *gocmd.Context
+		gitCtx   *git.Context
+		gitFlags []git.Flag
+		flags    flagSet
+	}
+
+	DepsFile struct {
+		Deps     []PkgDep
+		TestDeps []PkgDep
+	}
+
+	PkgDep struct {
+		ImportPath string
+		GitRemote  string //Blank for standard packages
+		SHA        string //Blank for standard packages
+		Tags       []string
+	}
+
+	PkgDepsByImport []PkgDep
+)
+
+const (
+	_ Flag = iota
+	MustExit
+	MustPanic
+	Warn
+	Verbose
+)
+
+var (
+	gitFlags = map[Flag]git.Flag{
+		MustExit:  git.MustExit,
+		MustPanic: git.MustPanic,
+		Warn:      git.Warn,
+		Verbose:   git.Verbose,
+	}
+)
+
+func (fs flagSet) Checked(flag Flag) bool {
+	_, ok := fs[flag]
+
+	return ok
 }
 
 func (d *DepsFile) Sort() {
@@ -36,191 +75,46 @@ func (d *DepsFile) Sort() {
 	sort.Sort(PkgDepsByImport(d.TestDeps))
 }
 
-type PkgDep struct {
-	ImportPath string
-	GitRemote  string //Blank for standard packages
-	SHA        string //Blank for standard packages
-	Tags       []string
-}
-
-type PkgDepsByImport []PkgDep
-
 func (a PkgDepsByImport) Len() int           { return len(a) }
 func (a PkgDepsByImport) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a PkgDepsByImport) Less(i, j int) bool { return a[i].ImportPath < a[j].ImportPath }
 
-func NewContext(output cmd.Output, goPath []string) *Context {
-	return &Context{
-		doneDirs: set{},
-		output:   output,
+func New(format richtext.Format, goPath []string, flags ...Flag) *Context {
+	c := &Context{
+		doneDirs: stringSet{},
+		format:   format,
 		goPath:   goPath,
-		goCtx:    gocmd.New(output, goPath),
-		gitCtx:   git.New(output),
+		goCtx:    gocmd.New(format, goPath),
+		flags:    flagSet{},
 	}
+
+	for _, flag := range flags {
+		if gitFlag, ok := gitFlags[flag]; ok {
+			c.gitFlags = append(c.gitFlags, gitFlag)
+		}
+		c.flags[flag] = empty{}
+	}
+
+	c.gitCtx = git.New(format, c.gitFlags...)
+
+	return c
 }
 
-func pkgContains(parent, child string) bool {
-	if parent == child || strings.HasPrefix(child, parent+"/") {
-		return true
-	}
-	return false
-}
-
-func (c *Context) scanDeps(startingList map[string]map[string]interface{}, workingDir string, deps set) []PkgDep {
-	result := []PkgDep{}
-outer:
-	for importPath, _ := range deps {
-		if c.goCtx.IsStdLib(importPath) {
-			continue
-		}
-
-		if _, isStartingPkg := startingList[importPath]; isStartingPkg {
-			continue
-		}
-
-		list, err := c.goCtx.List(workingDir, importPath)
-		if err != nil {
-			c.output.Error("Could not process dependency '%s'", importPath)
-			os.Exit(1)
-		}
-
-		cmdCtx := cmd.NewContext(".", c.output, cmd.Must)
-		dir, _ := dsutil.SanitisePath(cmdCtx, list[importPath]["Dir"].(string))
-
-		if !strings.HasSuffix(dir, importPath) {
-			c.output.Error("Package import path directory mismatch (path sanity failure) %s should end in %s", dir, importPath)
-			os.Exit(1)
-		}
-
-		if _, done := c.doneDirs[dir]; done {
-			continue
-		}
-
-		for doneDir, _ := range c.doneDirs {
-			if strings.HasPrefix(dir, doneDir+"/") {
-				continue outer
-			}
-		}
-
-		if !c.gitCtx.IsGit(dir) {
-			c.output.Error("Import %s (%s) is not a git repository", importPath, dir)
-			os.Exit(1)
-		}
-
-		status, _ := c.gitCtx.Status(dir, true)
-		if status == git.NotMaster {
-			c.output.Warning("Import %s (%s) is not origin/master", importPath, dir)
-		} else if status != git.Clean {
-			c.output.Error("Import %s (%s) has git status %s", importPath, dir, status.String())
-			os.Exit(1)
-		}
-
-		topLevel, _ := c.gitCtx.TopLevel(dir, true)
-		topLevel, _ = dsutil.SanitisePath(cmdCtx, topLevel)
-
-		rootImportPath := importPath[:len(importPath)+len(topLevel)-len(dir)]
-
-		c.doneDirs[topLevel] = empty{}
-
-		remoteOriginUrl, _ := c.gitCtx.RemoteOriginUrl(dir, true)
-		SHA, _ := c.gitCtx.SHA(dir, true)
-		tags, _ := c.gitCtx.Tags(dir, true)
-		result = append(result, PkgDep{rootImportPath, remoteOriginUrl, SHA, tags})
-	}
-	return result
-}
-
-//pkg string should be a space delimited list of packages including all subfolders
-//typically ./...
-func (c *Context) Snapshot(workingDir, pkgString string) DepsFile {
-	cmdCtx := cmd.NewContext(".", c.output, cmd.Must)
-	list, err := c.goCtx.List(workingDir, pkgString)
-	if err != nil {
-		c.output.Error("Failed to run go list")
+func (c *Context) errorf(s string, a ...interface{}) error {
+	if c.flags.Checked(MustExit) {
+		c.format.ErrorLine(s, a...)
 		os.Exit(1)
+	} else if c.flags.Checked(MustPanic) {
+		panic(fmt.Errorf(s, a...))
+	} else if c.flags.Checked(Warn) || c.flags.Checked(Verbose) {
+		c.format.WarningLine(s, a...)
 	}
-
-	allTestImports := set{}
-	regDeps := set{}
-
-	for _, e := range list {
-		dir, _ := dsutil.SanitisePath(cmdCtx, e["Dir"].(string))
-		c.doneDirs[dir] = empty{}
-
-		if testImportsInt, ok := e["TestImports"]; ok {
-			testImports := testImportsInt.([]interface{})
-			for _, testImport := range testImports {
-				allTestImports[testImport.(string)] = empty{}
-			}
-		}
-
-		if xTestImportsInt, ok := e["XTestImports"]; ok {
-			xTestImports := xTestImportsInt.([]interface{})
-			for _, testImport := range xTestImports {
-				allTestImports[testImport.(string)] = empty{}
-			}
-		}
-
-		if depsInt, ok := e["Deps"]; ok {
-			deps := depsInt.([]interface{})
-			for _, dep := range deps {
-				regDeps[dep.(string)] = empty{}
-			}
-		}
-	}
-
-	allTestImportList := []string{}
-	for i, _ := range allTestImports {
-		allTestImportList = append(allTestImportList, i)
-	}
-
-	testDeps := set{}
-	if len(allTestImportList) > 0 {
-		testList, _ := c.goCtx.List(workingDir, strings.Join(allTestImportList, " "))
-		for _, e := range testList {
-			if depsInt, ok := e["Deps"]; ok {
-				deps := depsInt.([]interface{})
-				for _, dep := range deps {
-					if _, isRegDep := regDeps[dep.(string)]; isRegDep {
-						continue
-					}
-					testDeps[dep.(string)] = empty{}
-				}
-			}
-		}
-	}
-
-	depsScan := c.scanDeps(list, workingDir, regDeps)
-	testDepsScan := c.scanDeps(list, workingDir, testDeps)
-
-	r := DepsFile{Deps: depsScan, TestDeps: testDepsScan}
-	r.Sort()
-	return r
-
+	return fmt.Errorf(s, a...)
 }
 
-func (c *Context) reproduceDep(pkgDep PkgDep) {
-	dir := filepath.Join(c.goPath[0], "src", pkgDep.ImportPath)
-	if dsutil.CheckPath(dir) {
-		c.output.Error("Package '%s' can't be cloned to '%s', path already exists.", pkgDep.ImportPath, dir)
-		os.Exit(1)
-	}
-
-	c.gitCtx.Clone(dir, pkgDep.GitRemote, true)
-	sha, _ := c.gitCtx.SHA(dir, true)
-	if sha != pkgDep.SHA {
-		c.gitCtx.Checkout(dir, pkgDep.SHA, true)
-	}
-}
-
-func (c *Context) Reproduce(workingDir string, depsFile DepsFile, doTests bool) {
-	for _, pkgDep := range depsFile.Deps {
-		c.reproduceDep(pkgDep)
-	}
-	if doTests {
-		for _, pkgDep := range depsFile.TestDeps {
-			c.reproduceDep(pkgDep)
-		}
+func (c *Context) warnf(s string, a ...interface{}) {
+	if c.flags.Checked(Warn) {
+		c.format.WarningLine(s, a...)
 	}
 }
 
@@ -243,4 +137,11 @@ func WriteJson(filename string, depsFile DepsFile) error {
 	}
 
 	return ioutil.WriteFile(filename, jsonOutput, 0644)
+}
+
+func pkgContains(parent, child string) bool {
+	if parent == child || strings.HasPrefix(child, parent+"/") {
+		return true
+	}
+	return false
 }
