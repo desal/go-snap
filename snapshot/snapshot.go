@@ -126,8 +126,8 @@ func ReadJson(filename string) (DepsFile, error) {
 		return result, err
 	}
 
-	json.Unmarshal(file, &result)
-	return result, nil
+	err = json.Unmarshal(file, &result)
+	return result, err
 }
 
 func WriteJson(filename string, depsFile DepsFile) error {

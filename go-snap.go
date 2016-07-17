@@ -25,7 +25,7 @@ func setupContext(format richtext.Format, verbose bool) *snapshot.Context {
 
 func main() {
 	app := cli.App("go-snap", "Go dependency snapshot management")
-	format := richtext.Ansi()
+	format := richtext.New()
 
 	var (
 		filename = app.StringOpt("f filename", "snapshot.json", "filename to save snapshot to")
@@ -70,7 +70,11 @@ func main() {
 				os.Exit(1)
 			}
 
-			ctx.Reproduce(".", depsFile, !*skipTests, *force)
+			err = ctx.Reproduce(".", depsFile, !*skipTests, *force)
+			if err != nil {
+				format.ErrorLine("%s", err.Error())
+				os.Exit(1)
+			}
 		}
 	})
 

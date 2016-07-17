@@ -21,6 +21,8 @@ func (c *Context) reproduceDep(pkgDep PkgDep, force bool) error {
 			return c.errorf("Failed to reproduce %s, could not get git status for %s: %s.", pkgDep.GitRemote, dir, err.Error())
 		} else if gitStatus != git.Clean {
 			return c.errorf("Failed to reproduce %s, git status for %s is %s.", pkgDep.GitRemote, dir, gitStatus.String())
+		} else if err = c.gitCtx.Checkout(dir, "master"); err != nil {
+			return c.errorf("Failed to checkout master, git pull error in %s: %s.", dir, err.Error())
 		} else if err = c.gitCtx.Pull(dir); err != nil {
 			return c.errorf("Failed to reproduce %s, git pull error in %s: %s.", pkgDep.GitRemote, dir, err.Error())
 		}

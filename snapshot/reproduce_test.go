@@ -50,7 +50,7 @@ import (
 
 func main() { fmt.Println(depone.One * deptwo.Two) }
 `)
-	files, _, _ := m.goCtx.Execf(`find . -not -path "*/.git*"`)
+	files, _, _ := m.goCtx.Execf(`find . -not -path "*/.git*"|sort`)
 	assert.Equal(t, `.
 ./src
 ./src/mainpkg
@@ -72,7 +72,7 @@ func main() { fmt.Println(depone.One * deptwo.Two) }
 
 	err := ctx.Reproduce(m.gopath, depsFile, false, false)
 	require.Nil(t, err)
-	files, _, _ = m.goCtx.Execf(`find . -not -path "*/.git*"`)
+	files, _, _ = m.goCtx.Execf(`find . -not -path "*/.git*"|sort`)
 	assert.Equal(t, `.
 ./src
 ./src/depone
