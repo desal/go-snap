@@ -53,6 +53,7 @@ const (
 	MustPanic
 	Warn
 	Verbose
+	SkipVendor
 )
 
 var (

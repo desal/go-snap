@@ -1,15 +1,30 @@
 package snapshot
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/desal/git"
+	"github.com/desal/gocmd"
 )
+
+func (c *Context) doneRootDir(dir string) bool {
+	if _, done := c.doneDirs[dir]; done {
+		return true
+	}
+
+	for doneDir, _ := range c.doneDirs {
+		//To not confuse pkgtwo/ as a subdirectory of pkg/
+		if strings.HasPrefix(dir, doneDir+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
 
 func (c *Context) scanDeps(startingList map[string]map[string]interface{}, workingDir string, deps stringSet) ([]PkgDep, error) {
 	result := []PkgDep{}
-outer:
 	for importPath, _ := range deps {
 		if c.goCtx.IsStdLib(importPath) {
 			continue
@@ -30,15 +45,8 @@ outer:
 			return nil, c.errorf("Falied to scan dependency: directory %s should end in %s.", filepath.ToSlash(dir), importPath)
 		}
 
-		if _, done := c.doneDirs[dir]; done {
+		if c.doneRootDir(dir) {
 			continue
-		}
-
-		for doneDir, _ := range c.doneDirs {
-			//To not confuse pkgtwo/ as a subdirectory of pkg/
-			if strings.HasPrefix(dir, doneDir+string(filepath.Separator)) {
-				continue outer
-			}
 		}
 
 		if !c.gitCtx.IsGit(dir) {
@@ -74,7 +82,15 @@ outer:
 //pkg string should be a space delimited list of packages including all subfolders
 //typically ./...
 func (c *Context) Snapshot(workingDir, pkgString string) (DepsFile, error) {
-	list, err := c.goCtx.List(workingDir, pkgString)
+	var goListCtx *gocmd.Context
+
+	if c.flags.Checked(SkipVendor) {
+		goListCtx = gocmd.New(c.format, c.goPath)
+	} else {
+		goListCtx = c.goCtx
+	}
+
+	list, err := goListCtx.List(workingDir, pkgString)
 	if err != nil {
 		return DepsFile{}, c.errorf("Failed to run go list: %s", err.Error())
 	}
@@ -84,6 +100,23 @@ func (c *Context) Snapshot(workingDir, pkgString string) (DepsFile, error) {
 
 	for _, e := range list {
 		dir := e["Dir"].(string)
+
+		if !c.doneRootDir(dir) {
+			//In case the root dir itself doesn't contain any .go files (only sub
+			//packages).
+
+			if !c.gitCtx.IsGit(dir) {
+				return DepsFile{}, fmt.Errorf("All scanned directories must be in a git repo")
+			}
+
+			topLevel, err := c.gitCtx.TopLevel(dir)
+			if err != nil {
+				return DepsFile{}, err
+			}
+			c.doneDirs[topLevel] = empty{}
+
+		}
+
 		c.doneDirs[dir] = empty{}
 
 		if testImportsInt, ok := e["TestImports"]; ok {
