@@ -42,26 +42,28 @@ type (
 		GitRemote  string //Blank for standard packages
 		SHA        string //Blank for standard packages
 		Tags       []string
+		Error      error `json:"-"`
 	}
 
 	PkgDepsByImport []PkgDep
 )
 
 const (
-	_ Flag = iota
-	MustExit
-	MustPanic
-	Warn
-	Verbose
-	SkipVendor
+	_          Flag = iota
+	MustExit        //
+	MustPanic       //
+	Warn            //
+	Verbose         // show pkgname\n as it goes
+	CmdVerbose      // Also displays commands being executed
+	SkipVendor      //
 )
 
 var (
 	gitFlags = map[Flag]git.Flag{
-		MustExit:  git.MustExit,
-		MustPanic: git.MustPanic,
-		Warn:      git.Warn,
-		Verbose:   git.Verbose,
+		MustExit:   git.MustExit,
+		MustPanic:  git.MustPanic,
+		Warn:       git.Warn,
+		CmdVerbose: git.Verbose,
 	}
 )
 
@@ -69,6 +71,15 @@ func (fs flagSet) Checked(flag Flag) bool {
 	_, ok := fs[flag]
 
 	return ok
+}
+
+func (ss stringSet) Sorted() []string {
+	r := []string{}
+	for s, _ := range ss {
+		r = append(r, s)
+	}
+	sort.Strings(r)
+	return r
 }
 
 func (d *DepsFile) Sort() {
@@ -85,7 +96,7 @@ func New(format richtext.Format, goPath []string, flags ...Flag) *Context {
 		doneDirs: stringSet{},
 		format:   format,
 		goPath:   goPath,
-		goCtx:    gocmd.New(format, goPath),
+		goCtx:    gocmd.New(format, goPath, ""),
 		flags:    flagSet{},
 	}
 
@@ -116,6 +127,12 @@ func (c *Context) errorf(s string, a ...interface{}) error {
 func (c *Context) warnf(s string, a ...interface{}) {
 	if c.flags.Checked(Warn) {
 		c.format.WarningLine(s, a...)
+	}
+}
+
+func (c *Context) verbosef(s string, a ...interface{}) {
+	if c.flags.Checked(Verbose) {
+		c.format.PrintLine(s, a...)
 	}
 }
 

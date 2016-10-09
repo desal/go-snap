@@ -1,6 +1,7 @@
 package snapshot_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/desal/dsutil"
@@ -62,15 +63,17 @@ func main() { fmt.Println(depone.One * deptwo.Two) }
 	sha1, _ := gitCtx.SHA(m.bareDir + "/depone")
 	sha2, _ := gitCtx.SHA(m.bareDir + "/deptwo")
 
-	ctx := snapshot.New(richtext.Test(t), []string{m.gopath})
+	buf := &bytes.Buffer{}
+	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
+
 	depsFile := snapshot.DepsFile{
 		Deps: []snapshot.PkgDep{
-			snapshot.PkgDep{"depone", dsutil.PosixPath(m.bareDir) + "/depone", sha1, []string{}},
-			snapshot.PkgDep{"deptwo", dsutil.PosixPath(m.bareDir) + "/deptwo", sha2, []string{}},
+			snapshot.PkgDep{"depone", dsutil.PosixPath(m.bareDir) + "/depone", sha1, nil, nil},
+			snapshot.PkgDep{"deptwo", dsutil.PosixPath(m.bareDir) + "/deptwo", sha2, nil, nil},
 		},
 	}
 
-	err := ctx.Reproduce(m.gopath, depsFile, false, false)
+	err := ctx.Reproduce(m.gopath, depsFile, false, snapshot.AlreadyExists_Fail)
 	require.Nil(t, err)
 	files, _, _ = m.goCtx.Execf(`find . -not -path "*/.git*"|sort`)
 	assert.Equal(t, `.
@@ -85,4 +88,6 @@ func main() { fmt.Println(depone.One * deptwo.Two) }
 ./src/mainpkg/init
 ./src/mainpkg/main.go
 `, files)
+
+	assert.Equal(t, "depone\ndeptwo\n", buf.String())
 }

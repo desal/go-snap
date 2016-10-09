@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -23,60 +24,68 @@ func (c *Context) doneRootDir(dir string) bool {
 	return false
 }
 
-func (c *Context) scanDeps(startingList map[string]map[string]interface{}, workingDir string, deps stringSet) ([]PkgDep, error) {
-	result := []PkgDep{}
-	for importPath, _ := range deps {
-		if c.goCtx.IsStdLib(importPath) {
-			continue
-		}
+//returns nil for not a dependency
+func (c *Context) scanDep(startingList map[string]map[string]interface{}, workingDir string, importPath string) *PkgDep {
+	r := &PkgDep{ImportPath: importPath} //Initially create the object with the current importPath, and refine it to the root package if it's possible
 
-		if _, isStartingPkg := startingList[importPath]; isStartingPkg {
-			continue
-		}
-
-		list, err := c.goCtx.List(workingDir, importPath)
-		if err != nil {
-			return nil, c.errorf("Failed to scan dependency %s: %s.", importPath, err.Error())
-		}
-
-		dir := list[importPath]["Dir"].(string)
-
-		if !strings.HasSuffix(filepath.ToSlash(dir), importPath) {
-			return nil, c.errorf("Falied to scan dependency: directory %s should end in %s.", filepath.ToSlash(dir), importPath)
-		}
-
-		if c.doneRootDir(dir) {
-			continue
-		}
-
-		if !c.gitCtx.IsGit(dir) {
-			return nil, c.errorf("Import %s (%s) is not a git repository", importPath, dir)
-		}
-
-		status, _ := c.gitCtx.Status(dir)
-		if status == git.NotMaster {
-			c.warnf("Import %s (%s) is not origin/master", importPath, dir)
-		} else if status != git.Clean {
-			return nil, c.errorf("Import %s (%s) has git status %s", importPath, dir, status.String())
-		}
-
-		topLevel, _ := c.gitCtx.TopLevel(dir)
-
-		//Example
-		// dir            = c:\\dev\\golang\\src\\github.com\\desal\\go-snap\\snapshot
-		// topLevel       = c:\\dev\\golang\\src\\github.com\\desal\\go-snap
-		// importPath     = github.com/desal/go-snap/snapshot/snapshot
-		// rootImportPath = github.com/desal/go-snap/snapshot
-		rootImportPath := importPath[:len(importPath)+len(topLevel)-len(dir)]
-
-		c.doneDirs[topLevel] = empty{}
-
-		remoteOriginUrl, _ := c.gitCtx.RemoteOriginUrl(dir)
-		SHA, _ := c.gitCtx.SHA(dir)
-		tags, _ := c.gitCtx.Tags(dir)
-		result = append(result, PkgDep{rootImportPath, remoteOriginUrl, SHA, tags})
+	if c.goCtx.IsStdLib(importPath) {
+		return nil
 	}
-	return result, nil
+
+	if _, isStartingPkg := startingList[importPath]; isStartingPkg {
+		return nil
+	}
+
+	list, err := c.goCtx.List(workingDir, importPath)
+	if err != nil {
+		r.Error = c.errorf("Failed to scan dependency %s: %s.", importPath, err.Error())
+		return r
+	}
+
+	dir := list[importPath]["Dir"].(string)
+
+	if !strings.HasSuffix(filepath.ToSlash(dir), importPath) {
+		r.Error = c.errorf("Falied to scan dependency: directory %s should end in %s.", filepath.ToSlash(dir), importPath)
+		return r
+	}
+
+	if c.doneRootDir(dir) {
+		return nil
+	}
+
+	if !c.gitCtx.IsGit(dir) {
+		r.Error = c.errorf("Import %s (%s) is not a git repository", importPath, dir)
+		return r
+	}
+
+	status, _ := c.gitCtx.Status(dir)
+	if status == git.NotMaster {
+		c.warnf("Import %s (%s) is not origin/master", importPath, dir)
+	} else if status != git.Clean {
+		r.Error = c.errorf("Import %s (%s) has git status %s", importPath, dir, status.String())
+	}
+
+	topLevel, _ := c.gitCtx.TopLevel(dir)
+
+	//Example
+	// dir            = c:\\dev\\golang\\src\\github.com\\desal\\go-snap\\snapshot
+	// topLevel       = c:\\dev\\golang\\src\\github.com\\desal\\go-snap
+	// importPath     = github.com/desal/go-snap/snapshot/snapshot
+	// rootImportPath = github.com/desal/go-snap/snapshot
+	r.ImportPath = importPath[:len(importPath)+len(topLevel)-len(dir)]
+	c.doneDirs[topLevel] = empty{}
+
+	remoteOriginUrl, _ := c.gitCtx.RemoteOriginUrl(dir)
+	SHA, _ := c.gitCtx.SHA(dir)
+	tags, _ := c.gitCtx.Tags(dir)
+
+	r.GitRemote = remoteOriginUrl
+	r.SHA = SHA
+	r.Tags = tags
+	if r.Error == nil {
+		c.verbosef("%s", importPath)
+	}
+	return r
 }
 
 //pkg string should be a space delimited list of packages including all subfolders
@@ -85,7 +94,7 @@ func (c *Context) Snapshot(workingDir, pkgString string) (DepsFile, error) {
 	var goListCtx *gocmd.Context
 
 	if c.flags.Checked(SkipVendor) {
-		goListCtx = gocmd.New(c.format, c.goPath)
+		goListCtx = gocmd.New(c.format, c.goPath, "")
 	} else {
 		goListCtx = c.goCtx
 	}
@@ -166,18 +175,37 @@ func (c *Context) Snapshot(workingDir, pkgString string) (DepsFile, error) {
 		}
 	}
 
-	depsScan, err := c.scanDeps(list, workingDir, regDeps)
-	if err != nil {
-		return DepsFile{}, err
+	scanDeps := func(deps stringSet) []PkgDep {
+		r := []PkgDep{}
+		for _, dep := range deps.Sorted() {
+			if pkgDep := c.scanDep(list, workingDir, dep); pkgDep != nil {
+				r = append(r, *pkgDep)
+			}
+		}
+		return r
 	}
 
-	testDepsScan, err := c.scanDeps(list, workingDir, testDeps)
-	if err != nil {
-		return DepsFile{}, err
+	r := DepsFile{
+		Deps:     scanDeps(regDeps),
+		TestDeps: scanDeps(testDeps),
 	}
 
-	r := DepsFile{Deps: depsScan, TestDeps: testDepsScan}
 	r.Sort()
 
-	return r, nil
+	errStrings := []string{}
+	appendErrs := func(pkgDeps []PkgDep) {
+		for _, dep := range pkgDeps {
+			if dep.Error != nil {
+				errStrings = append(errStrings, dep.Error.Error())
+			}
+		}
+	}
+
+	appendErrs(r.Deps)
+	appendErrs(r.TestDeps)
+	err = nil
+	if len(errStrings) != 0 {
+		err = errors.New(strings.Join(errStrings, ", "))
+	}
+	return r, err
 }

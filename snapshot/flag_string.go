@@ -4,9 +4,9 @@ package snapshot
 
 import "fmt"
 
-const _Flag_name = "MustExitMustPanicWarnVerbose"
+const _Flag_name = "MustExitMustPanicWarnVerboseCmdVerboseSkipVendor"
 
-var _Flag_index = [...]uint8{0, 8, 17, 21, 28}
+var _Flag_index = [...]uint8{0, 8, 17, 21, 28, 38, 48}
 
 func (i Flag) String() string {
 	i -= 1
