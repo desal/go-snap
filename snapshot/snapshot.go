@@ -154,7 +154,12 @@ func WriteJson(filename string, depsFile DepsFile) error {
 		return err
 	}
 
-	return ioutil.WriteFile(filename, jsonOutput, 0644)
+	if filename == "stdout" {
+		_, err := os.Stdout.Write(jsonOutput)
+		return err
+	} else {
+		return ioutil.WriteFile(filename, jsonOutput, 0644)
+	}
 }
 
 func pkgContains(parent, child string) bool {
