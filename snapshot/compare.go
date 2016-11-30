@@ -28,8 +28,8 @@ const (
 	CompareResult_Error
 )
 
-func (c *Context) Compare(workingDir, pkgString string, depsFile DepsFile, dotests bool) ([]ComparePkg, bool) {
-	snapshot, _ := c.Snapshot(workingDir, pkgString)
+func (c *Context) Compare(workingDir, pkgString string, tagSets []string, depsFile DepsFile, dotests bool) ([]ComparePkg, bool) {
+	snapshot, _ := c.Snapshot(workingDir, pkgString, tagSets)
 
 	result := []ComparePkg{}
 	ok := true

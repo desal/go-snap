@@ -22,34 +22,34 @@ func (c *Context) reproduceDep(pkgDep PkgDep, alreadyExists AlreadyExists) error
 	var err error
 
 	if !dsutil.CheckPath(dir) {
-		err := c.gitCtx.Clone(dir, pkgDep.GitRemote)
+		err := c.reproduceGitCtx.Clone(dir, pkgDep.GitRemote)
 		if err != nil {
 			return c.errorf("Failed to produce %s, git clone error in %s: %s.", pkgDep.GitRemote, dir, err.Error())
 		}
 	} else if alreadyExists == AlreadyExists_Fail {
 		return c.errorf("Failed to reproduce %s, %s already exists.", pkgDep.GitRemote, dir)
 	} else if alreadyExists == AlreadyExists_Force {
-		if isGit := c.gitCtx.IsGit(dir); !isGit {
+		if isGit := c.reproduceGitCtx.IsGit(dir); !isGit {
 			return c.errorf("Falied to reproduce %s, %s is not a git repo.", pkgDep.GitRemote, dir)
-		} else if gitStatus, err := c.gitCtx.Status(dir); err != nil {
+		} else if gitStatus, err := c.reproduceGitCtx.Status(dir); err != nil {
 			return c.errorf("Failed to reproduce %s, could not get git status for %s: %s.", pkgDep.GitRemote, dir, err.Error())
 		} else if gitStatus != git.Clean {
 			return c.errorf("Failed to reproduce %s, git status for %s is %s.", pkgDep.GitRemote, dir, gitStatus.String())
-		} else if err = c.gitCtx.Checkout(dir, "master"); err != nil {
+		} else if err = c.reproduceGitCtx.Checkout(dir, "master"); err != nil {
 			return c.errorf("Failed to checkout master, git pull error in %s: %s.", dir, err.Error())
-		} else if err = c.gitCtx.Pull(dir); err != nil {
+		} else if err = c.reproduceGitCtx.Pull(dir); err != nil {
 			return c.errorf("Failed to reproduce %s, git pull error in %s: %s.", pkgDep.GitRemote, dir, err.Error())
 		}
 	} else if alreadyExists == AlreadyExists_Continue {
 		goto ok
 	} else if alreadyExists == AlreadyExists_Check {
-		if isGit := c.gitCtx.IsGit(dir); !isGit {
+		if isGit := c.reproduceGitCtx.IsGit(dir); !isGit {
 			return c.errorf("Falied to check %s, %s is not a git repo.", pkgDep.GitRemote, dir)
-		} else if gitStatus, err := c.gitCtx.Status(dir); err != nil {
+		} else if gitStatus, err := c.reproduceGitCtx.Status(dir); err != nil {
 			return c.errorf("Failed to check %s, could not get git status for %s: %s.", pkgDep.GitRemote, dir, err.Error())
 		} else if gitStatus != git.Clean {
 			return c.errorf("Failed to check %s, git status for %s is %s.", pkgDep.GitRemote, dir, gitStatus.String())
-		} else if sha, err := c.gitCtx.SHA(dir); err != nil {
+		} else if sha, err := c.reproduceGitCtx.SHA(dir); err != nil {
 			return c.errorf("Failed to check %s, could not get git sha for %s: %s.", pkgDep.GitRemote, dir, err.Error())
 		} else if sha != pkgDep.SHA {
 			return c.errorf("Check %s failed. Expected SHA %s, Have %s.", pkgDep.GitRemote, pkgDep.SHA, sha)
@@ -58,12 +58,12 @@ func (c *Context) reproduceDep(pkgDep PkgDep, alreadyExists AlreadyExists) error
 		}
 	}
 
-	sha, err = c.gitCtx.SHA(dir)
+	sha, err = c.reproduceGitCtx.SHA(dir)
 	if err != nil {
 		return c.errorf("Failed to reproduce %s, git error getting current SHA in %s: %s.", pkgDep.GitRemote, dir, err.Error())
 	} else if sha == pkgDep.SHA {
 
-	} else if err := c.gitCtx.Checkout(dir, pkgDep.SHA); err != nil {
+	} else if err := c.reproduceGitCtx.Checkout(dir, pkgDep.SHA); err != nil {
 		return c.errorf("Failed to reproduce %s, git error in checkout in %s: %s.", pkgDep.GitRemote, dir, err.Error())
 	}
 ok:

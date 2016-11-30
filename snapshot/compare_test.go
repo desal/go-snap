@@ -66,7 +66,7 @@ func TestCompare(t *testing.T) {
 	`)
 
 	ctx := snapshot.New(richtext.Test(t), []string{m.gopath})
-	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg")
+	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	assert.Nil(t, err)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
@@ -113,7 +113,7 @@ func TestCompare(t *testing.T) {
 
 	buf := &bytes.Buffer{}
 	compareCtx := snapshot.New(richtext.Debug(buf), []string{m.gopath})
-	result, ok := compareCtx.Compare(m.gopath, "mainpkg", depsFile, true)
+	result, ok := compareCtx.Compare(m.gopath, "mainpkg", []string{""}, depsFile, true)
 	assert.False(t, ok)
 
 	assert.NotEqual(t, "", result[1].Message)

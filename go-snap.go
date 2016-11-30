@@ -22,6 +22,7 @@ func setupContext(format richtext.Format, verbose, veryVerbose bool) *snapshot.C
 	} else if verbose {
 		flags = append(flags, snapshot.Verbose)
 	}
+
 	return snapshot.New(format, goPath, flags...)
 }
 
@@ -35,15 +36,19 @@ func main() {
 		veryVerbose = app.BoolOpt("vv veryverbose", false, "Verbose output and verbose command output")
 	)
 	app.Command("snapshot", "Takes a snapshot of all currently used dependencies", func(c *cli.Cmd) {
-		c.Spec = "PKG..."
-
+		c.Spec = "[--tags] PKG..."
 		var (
-			pkgs = c.StringsArg("PKG", nil, "Packages to snapshot")
+			tagSets = c.StringsOpt("tags", nil, "capture with tags (can be repeated)")
+			pkgs    = c.StringsArg("PKG", nil, "Packages to snapshot")
 		)
 
 		c.Action = func() {
+			if tagSets == nil {
+				tagSets = &[]string{""}
+			}
+
 			ctx := setupContext(format, *verbose, *veryVerbose)
-			depsFile, err := ctx.Snapshot(".", strings.Join(*pkgs, " "))
+			depsFile, err := ctx.Snapshot(".", strings.Join(*pkgs, " "), *tagSets)
 
 			if err != nil {
 				format.ErrorLine("%s", err.Error())
@@ -93,14 +98,19 @@ func main() {
 	})
 
 	app.Command("compare", "Compares snapshot.json to what's currently used to build", func(c *cli.Cmd) {
-		c.Spec = "[-t] PKG..."
+		c.Spec = "[--tags] [-t] PKG..."
 
 		var (
+			tagSets   = c.StringsOpt("tags", nil, "capture with tags (can be repeated)")
 			skipTests = c.BoolOpt("t notests", false, "Skip dependencies used exclusively for tests")
 			pkgs      = c.StringsArg("PKG", nil, "Packages to snapshot")
 		)
 
 		c.Action = func() {
+			if tagSets == nil {
+				tagSets = &[]string{""}
+			}
+
 			ctx := setupContext(format, *verbose, *veryVerbose)
 
 			depsFile, err := snapshot.ReadJson(*filename)
@@ -109,7 +119,7 @@ func main() {
 				os.Exit(1)
 			}
 
-			_, ok := ctx.Compare(".", strings.Join(*pkgs, " "), depsFile, !*skipTests)
+			_, ok := ctx.Compare(".", strings.Join(*pkgs, " "), *tagSets, depsFile, !*skipTests)
 			if !ok {
 				os.Exit(1)
 			}

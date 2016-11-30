@@ -23,14 +23,15 @@ type (
 	stringSet map[string]empty
 
 	Context struct {
-		startPkg string
-		doneDirs stringSet
-		format   richtext.Format
-		goPath   []string
-		goCtx    *gocmd.Context
-		gitCtx   *git.Context
-		gitFlags []git.Flag
-		flags    flagSet
+		startPkg        string
+		doneDirs        stringSet
+		format          richtext.Format
+		goPath          []string
+		goCtx           *gocmd.Context
+		snapGitCtx      *git.Context
+		reproduceGitCtx *git.Context
+		gitFlags        []git.Flag
+		flags           flagSet
 	}
 
 	DepsFile struct {
@@ -97,7 +98,7 @@ func New(format richtext.Format, goPath []string, flags ...Flag) *Context {
 		doneDirs: stringSet{},
 		format:   format,
 		goPath:   goPath,
-		goCtx:    gocmd.New(format, goPath, ""),
+		goCtx:    gocmd.New(format, goPath, "", ""),
 		flags:    flagSet{},
 	}
 
@@ -108,7 +109,8 @@ func New(format richtext.Format, goPath []string, flags ...Flag) *Context {
 		c.flags[flag] = empty{}
 	}
 
-	c.gitCtx = git.New(format, c.gitFlags...)
+	c.snapGitCtx = git.New(format, c.gitFlags...)
+	c.reproduceGitCtx = git.New(format, append(c.gitFlags, git.LocalOnly)...)
 
 	return c
 }

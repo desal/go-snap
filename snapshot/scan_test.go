@@ -88,7 +88,7 @@ func main() { fmt.Println(depone.One * deptwo.Two) }
 `)
 	buf := &bytes.Buffer{}
 	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
-	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg")
+	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	require.Nil(t, err)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
@@ -151,7 +151,7 @@ func TestA(t *testing.T) { t.Log(depone.One * depone.Two) }
 
 	buf := &bytes.Buffer{}
 	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
-	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg")
+	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	require.Nil(t, err)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
@@ -214,7 +214,7 @@ func TestA(t *testing.T) { t.Log(depone.One * depone.Two) }
 
 	buf := &bytes.Buffer{}
 	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
-	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg")
+	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	require.Nil(t, err)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
@@ -271,7 +271,7 @@ func main() { fmt.Println(depone.One * deptwo.Two) }
 `)
 	buf := &bytes.Buffer{}
 	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
-	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg")
+	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	require.Nil(t, err)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
@@ -339,7 +339,7 @@ func main() { fmt.Println(depone.One * deptwo.Two * depthree.Three) }
 
 	buf := &bytes.Buffer{}
 	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
-	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg")
+	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	assert.NotNil(t, err)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
