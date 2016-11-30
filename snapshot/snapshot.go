@@ -3,6 +3,7 @@ package snapshot
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"sort"
@@ -139,12 +140,19 @@ func (c *Context) verbosef(s string, a ...interface{}) {
 func ReadJson(filename string) (DepsFile, error) {
 	var result DepsFile
 
-	file, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return result, err
+	var r io.Reader
+	var err error
+	if filename == "stdin" {
+		r = os.Stdin
+	} else {
+		r, err = os.Open(filename)
+		if err != nil {
+			return result, err
+		}
 	}
 
-	err = json.Unmarshal(file, &result)
+	dec := json.NewDecoder(r)
+	err = dec.Decode(&result)
 	return result, err
 }
 
