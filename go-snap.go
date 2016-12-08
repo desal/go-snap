@@ -36,17 +36,16 @@ func main() {
 		veryVerbose = app.BoolOpt("vv veryverbose", false, "Verbose output and verbose command output")
 	)
 	app.Command("snapshot", "Takes a snapshot of all currently used dependencies", func(c *cli.Cmd) {
-		c.Spec = "[--tags] PKG..."
+		c.Spec = "[--tags...] PKG..."
 		var (
 			tagSets = c.StringsOpt("tags", nil, "capture with tags (can be repeated)")
 			pkgs    = c.StringsArg("PKG", nil, "Packages to snapshot")
 		)
 
 		c.Action = func() {
-			if tagSets == nil {
-				tagSets = &[]string{""}
+			if len(*tagSets) == 0 {
+				*tagSets = append(*tagSets, "")
 			}
-
 			ctx := setupContext(format, *verbose, *veryVerbose)
 			depsFile, err := ctx.Snapshot(".", strings.Join(*pkgs, " "), *tagSets)
 
