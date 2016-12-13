@@ -14,6 +14,7 @@ const (
 	AlreadyExists_Force
 	AlreadyExists_Continue
 	AlreadyExists_Check
+	AlreadyExists_UpdateLatest
 )
 
 func (c *Context) reproduceDep(pkgDep PkgDep, alreadyExists AlreadyExists) error {
@@ -28,7 +29,7 @@ func (c *Context) reproduceDep(pkgDep PkgDep, alreadyExists AlreadyExists) error
 		}
 	} else if alreadyExists == AlreadyExists_Fail {
 		return c.errorf("Failed to reproduce %s, %s already exists.", pkgDep.GitRemote, dir)
-	} else if alreadyExists == AlreadyExists_Force {
+	} else if alreadyExists == AlreadyExists_Force || alreadyExists == AlreadyExists_UpdateLatest {
 		if isGit := c.reproduceGitCtx.IsGit(dir); !isGit {
 			return c.errorf("Falied to reproduce %s, %s is not a git repo.", pkgDep.GitRemote, dir)
 		} else if gitStatus, err := c.reproduceGitCtx.Status(dir); err != nil {
@@ -58,13 +59,15 @@ func (c *Context) reproduceDep(pkgDep PkgDep, alreadyExists AlreadyExists) error
 		}
 	}
 
-	sha, err = c.reproduceGitCtx.SHA(dir)
-	if err != nil {
-		return c.errorf("Failed to reproduce %s, git error getting current SHA in %s: %s.", pkgDep.GitRemote, dir, err.Error())
-	} else if sha == pkgDep.SHA {
+	if alreadyExists != AlreadyExists_UpdateLatest {
+		sha, err = c.reproduceGitCtx.SHA(dir)
+		if err != nil {
+			return c.errorf("Failed to reproduce %s, git error getting current SHA in %s: %s.", pkgDep.GitRemote, dir, err.Error())
+		} else if sha == pkgDep.SHA {
 
-	} else if err := c.reproduceGitCtx.Checkout(dir, pkgDep.SHA); err != nil {
-		return c.errorf("Failed to reproduce %s, git error in checkout in %s: %s.", pkgDep.GitRemote, dir, err.Error())
+		} else if err := c.reproduceGitCtx.Checkout(dir, pkgDep.SHA); err != nil {
+			return c.errorf("Failed to reproduce %s, git error in checkout in %s: %s.", pkgDep.GitRemote, dir, err.Error())
+		}
 	}
 ok:
 	c.verbosef("%s", pkgDep.ImportPath)

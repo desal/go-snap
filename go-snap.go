@@ -61,6 +61,29 @@ func main() {
 		}
 	})
 
+	app.Command("update", "Updates all deps specified in file to latest version found in git", func(c *cli.Cmd) {
+		c.Spec = "[-t]"
+		var (
+			skipTests = c.BoolOpt("t notests", false, "Skip dependencies used exclusively for tests")
+		)
+
+		c.Action = func() {
+			ctx := setupContext(format, *verbose, *veryVerbose)
+
+			depsFile, err := snapshot.ReadJson(*filename)
+			if err != nil {
+				format.ErrorLine("Could not read snapshot '%s': %s", *filename, err.Error())
+				os.Exit(1)
+			}
+
+			err = ctx.Reproduce(".", depsFile, !*skipTests, snapshot.AlreadyExists_UpdateLatest)
+			if err != nil {
+				format.ErrorLine("%s", err.Error())
+				os.Exit(1)
+			}
+		}
+	})
+
 	app.Command("reproduce", "Reproduces environment from file", func(c *cli.Cmd) {
 		c.Spec = "[-t] [-f | -i | -c]"
 		var (
