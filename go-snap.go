@@ -97,7 +97,7 @@ func main() {
 	})
 
 	app.Command("compare", "Compares snapshot.json to what's currently used to build", func(c *cli.Cmd) {
-		c.Spec = "[--tags] [-t] PKG..."
+		c.Spec = "[--tags...] [-t] PKG..."
 
 		var (
 			tagSets   = c.StringsOpt("tags", nil, "capture with tags (can be repeated)")
@@ -106,8 +106,8 @@ func main() {
 		)
 
 		c.Action = func() {
-			if tagSets == nil {
-				tagSets = &[]string{""}
+			if len(*tagSets) == 0 {
+				*tagSets = append(*tagSets, "")
 			}
 
 			ctx := setupContext(format, *verbose, *veryVerbose)

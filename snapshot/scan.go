@@ -81,10 +81,12 @@ func (c *Context) scanDep(startingList stringSet, workingDir string, importPath 
 
 	remoteOriginUrl, _ := c.snapGitCtx.RemoteOriginUrl(dir)
 	SHA, _ := c.snapGitCtx.SHA(dir)
+	commitTime, _ := c.snapGitCtx.CommitTime(dir)
 	tags, _ := c.snapGitCtx.Tags(dir)
 
 	r.GitRemote = remoteOriginUrl
 	r.SHA = SHA
+	r.CommitTime = commitTime
 	r.Tags = tags
 	if r.Error == nil {
 		c.verbosef("%s", importPath)

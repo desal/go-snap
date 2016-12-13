@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/desal/richtext"
 )
@@ -59,6 +60,19 @@ func (c *Context) Compare(workingDir, pkgString string, tagSets []string, depsFi
 				}
 				if len(expectedDep.Tags) != 0 {
 					expected += fmt.Sprintf(" %v", expectedDep.Tags)
+				}
+
+				nilTime := time.Time{}
+				if expectedDep.CommitTime != nilTime {
+					actual += fmt.Sprintf(" [%s]", actualDep.CommitTime.Format("2006-01-02 15:04:05"))
+					expected += fmt.Sprintf(" [%s]", expectedDep.CommitTime.Format("2006-01-02 15:04:05"))
+					if expectedDep.CommitTime.Sub(actualDep.CommitTime) > 0 {
+						actual += " OLDER"
+						expected += " NEWER"
+					} else {
+						actual += " NEWER"
+						expected += " OLDER"
+					}
 				}
 
 				result = append(result, ComparePkg{expectedDep.ImportPath, fmt.Sprintf("(expected) %s vs (actual) %s", expected, actual), CompareResult_Error})

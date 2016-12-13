@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/desal/git"
 	"github.com/desal/gocmd"
@@ -43,6 +44,7 @@ type (
 		ImportPath string
 		GitRemote  string //Blank for standard packages
 		SHA        string //Blank for standard packages
+		CommitTime time.Time
 		Tags       []string
 		Error      error `json:"-"`
 	}

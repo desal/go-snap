@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/desal/cmd"
 	"github.com/desal/dsutil"
@@ -21,6 +22,17 @@ type goCtx struct {
 	gopath  string
 	bareCtx *cmd.Context
 	goCtx   *cmd.Context
+}
+
+func stripTime(deps *snapshot.DepsFile) {
+	for i, dep := range deps.Deps {
+		dep.CommitTime = time.Time{}
+		deps.Deps[i] = dep
+	}
+	for i, dep := range deps.TestDeps {
+		dep.CommitTime = time.Time{}
+		deps.TestDeps[i] = dep
+	}
 }
 
 func SetupRepos(t *testing.T) *goCtx {
@@ -90,15 +102,17 @@ func main() { fmt.Println(depone.One * deptwo.Two) }
 	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
 	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	require.Nil(t, err)
+	stripTime(&depsFile)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
 	sha1, _ := gitCtx.SHA(m.bareDir + "/depone")
 	sha2, _ := gitCtx.SHA(m.bareDir + "/deptwo")
 
+	stripTime(&depsFile)
 	assert.Equal(t,
 		fmt.Sprintf("{["+
-			"{depone %s/depone %s [] <nil>} "+
-			"{deptwo %s/deptwo %s [] <nil>}"+
+			"{depone %s/depone %s 0001-01-01 00:00:00 +0000 UTC [] <nil>} "+
+			"{deptwo %s/deptwo %s 0001-01-01 00:00:00 +0000 UTC [] <nil>}"+
 			"] []}", dsutil.PosixPath(m.bareDir), sha1, dsutil.PosixPath(m.bareDir), sha2),
 		fmt.Sprintf("%v", depsFile))
 
@@ -153,6 +167,7 @@ func TestA(t *testing.T) { t.Log(depone.One * depone.Two) }
 	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
 	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	require.Nil(t, err)
+	stripTime(&depsFile)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
 	sha1, _ := gitCtx.SHA(m.bareDir + "/depone")
@@ -160,8 +175,8 @@ func TestA(t *testing.T) { t.Log(depone.One * depone.Two) }
 
 	assert.Equal(t,
 		fmt.Sprintf("{[] ["+
-			"{depone %s/depone %s [] <nil>} "+
-			"{deptwo %s/deptwo %s [] <nil>}"+
+			"{depone %s/depone %s 0001-01-01 00:00:00 +0000 UTC [] <nil>} "+
+			"{deptwo %s/deptwo %s 0001-01-01 00:00:00 +0000 UTC [] <nil>}"+
 			"]}", dsutil.PosixPath(m.bareDir), sha1, dsutil.PosixPath(m.bareDir), sha2),
 		fmt.Sprintf("%v", depsFile))
 
@@ -216,6 +231,7 @@ func TestA(t *testing.T) { t.Log(depone.One * depone.Two) }
 	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
 	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	require.Nil(t, err)
+	stripTime(&depsFile)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
 	sha1, _ := gitCtx.SHA(m.bareDir + "/depone")
@@ -223,8 +239,8 @@ func TestA(t *testing.T) { t.Log(depone.One * depone.Two) }
 
 	assert.Equal(t,
 		fmt.Sprintf("{[] ["+
-			"{depone %s/depone %s [] <nil>} "+
-			"{deptwo %s/deptwo %s [] <nil>}"+
+			"{depone %s/depone %s 0001-01-01 00:00:00 +0000 UTC [] <nil>} "+
+			"{deptwo %s/deptwo %s 0001-01-01 00:00:00 +0000 UTC [] <nil>}"+
 			"]}", dsutil.PosixPath(m.bareDir), sha1, dsutil.PosixPath(m.bareDir), sha2),
 		fmt.Sprintf("%v", depsFile))
 
@@ -273,6 +289,7 @@ func main() { fmt.Println(depone.One * deptwo.Two) }
 	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
 	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	require.Nil(t, err)
+	stripTime(&depsFile)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
 	sha1, _ := gitCtx.SHA(m.bareDir + "/depone")
@@ -280,8 +297,8 @@ func main() { fmt.Println(depone.One * deptwo.Two) }
 
 	assert.Equal(t,
 		fmt.Sprintf("{["+
-			"{depone %s/depone %s [v1.0] <nil>} "+
-			"{deptwo %s/deptwo %s [v1.0 vAwesome] <nil>}"+
+			"{depone %s/depone %s 0001-01-01 00:00:00 +0000 UTC [v1.0] <nil>} "+
+			"{deptwo %s/deptwo %s 0001-01-01 00:00:00 +0000 UTC [v1.0 vAwesome] <nil>}"+
 			"] []}", dsutil.PosixPath(m.bareDir), sha1, dsutil.PosixPath(m.bareDir), sha2),
 		fmt.Sprintf("%v", depsFile))
 
@@ -341,6 +358,7 @@ func main() { fmt.Println(depone.One * deptwo.Two * depthree.Three) }
 	ctx := snapshot.New(richtext.Debug(buf), []string{m.gopath}, snapshot.Verbose)
 	depsFile, err := ctx.Snapshot(m.gopath, "mainpkg", []string{""})
 	assert.NotNil(t, err)
+	stripTime(&depsFile)
 
 	gitCtx := git.New(richtext.Test(t), git.MustPanic)
 	sha1, _ := gitCtx.SHA(m.bareDir + "/depone")

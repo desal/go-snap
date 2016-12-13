@@ -3,6 +3,7 @@ package snapshot_test
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/desal/dsutil"
 	"github.com/desal/git"
@@ -68,8 +69,8 @@ func main() { fmt.Println(depone.One * deptwo.Two) }
 
 	depsFile := snapshot.DepsFile{
 		Deps: []snapshot.PkgDep{
-			snapshot.PkgDep{"depone", dsutil.PosixPath(m.bareDir) + "/depone", sha1, nil, nil},
-			snapshot.PkgDep{"deptwo", dsutil.PosixPath(m.bareDir) + "/deptwo", sha2, nil, nil},
+			snapshot.PkgDep{"depone", dsutil.PosixPath(m.bareDir) + "/depone", sha1, time.Time{}, nil, nil},
+			snapshot.PkgDep{"deptwo", dsutil.PosixPath(m.bareDir) + "/deptwo", sha2, time.Time{}, nil, nil},
 		},
 	}
 

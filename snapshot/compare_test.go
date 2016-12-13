@@ -113,6 +113,7 @@ func TestCompare(t *testing.T) {
 
 	buf := &bytes.Buffer{}
 	compareCtx := snapshot.New(richtext.Debug(buf), []string{m.gopath})
+	stripTime(&depsFile)
 	result, ok := compareCtx.Compare(m.gopath, "mainpkg", []string{""}, depsFile, true)
 	assert.False(t, ok)
 
